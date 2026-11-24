@@ -1,0 +1,100 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reel Reposter TikTok</title><link rel="stylesheet" href="style.css">
+<style>
+.btn{display:inline-block;background:#fe2c55;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-size:16px;text-decoration:none;cursor:pointer}
+label{display:block;margin:12px 0}select{display:block;margin-top:6px;padding:8px;font-size:16px;width:100%}
+.row{display:flex;gap:8px;align-items:flex-start}.small{font-size:14px}
+.msg{border:1px solid var(--line);padding:10px 12px;border-radius:8px}.acct{display:flex;gap:12px;align-items:center;margin:16px 0}
+.acct img{width:56px;height:56px;border-radius:50%}
+</style></head><body><main>
+<nav><a href="./">Home</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav>
+<h1>Reel Reposter for TikTok</h1>
+<p id="msg" class="msg" hidden></p>
+<p id="loading">Loading...</p>
+
+<section id="connect" hidden>
+  <p>Connect your TikTok account. Each new reel you post on Instagram will then be posted to it, with your caption.</p>
+  <a id="connectBtn" class="btn" href="#" hidden>Continue with TikTok</a>
+  <p id="connectLocked" class="small" hidden>Open this page from Reel Reposter to connect an account.</p>
+</section>
+
+<form id="settings" hidden>
+  <div class="acct"><img id="avatar" alt=""><div><b id="nick"></b><br><span id="user" class="small"></span></div></div>
+  <label>Who can see your reposts
+    <select id="privacy" required><option value="">Choose...</option></select></label>
+  <p class="small">Allow viewers to:</p>
+  <label class="row"><input type="checkbox" id="comment"> Comment <span id="comment_off" class="small" hidden>(turned off in your TikTok settings)</span></label>
+  <label class="row"><input type="checkbox" id="duet"> Duet <span id="duet_off" class="small" hidden>(turned off in your TikTok settings)</span></label>
+  <label class="row"><input type="checkbox" id="stitch"> Stitch <span id="stitch_off" class="small" hidden>(turned off in your TikTok settings)</span></label>
+  <p class="small">Content disclosure:</p>
+  <label class="row"><input type="checkbox" id="yourBrand"> Promotes my own brand, product or service. TikTok labels it "Promotional content".</label>
+  <label class="row"><input type="checkbox" id="branded"> Promotes a third party. TikTok labels it "Paid partnership".</label>
+  <label class="row"><input type="checkbox" id="consent"> Post each new reel from my Instagram to this TikTok account automatically, with these settings.</label>
+  <p class="small">By saving, you agree to TikTok's <a target="_blank" href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en">Music Usage Confirmation</a>
+    and, for branded content, the <a target="_blank" href="https://www.tiktok.com/legal/page/global/bc-policy/en">Branded Content Policy</a>.
+    After posting, it can take a few minutes for the video to appear on your profile.</p>
+  <button id="save" class="btn" type="submit">Save settings</button>
+  <p id="locked" class="small" hidden>Settings are locked. Open this page from Reel Reposter to change them.</p>
+</form>
+
+<footer><a href="./">Reel Reposter</a> &middot; <a href="privacy.html">Privacy policy</a> &middot; <a href="terms.html">Terms of service</a></footer>
+</main>
+<script>
+// Talks to the Reel Reposter app (Google Apps Script). Only text is inserted into the page, never HTML.
+var API = 'https://script.google.com/macros/s/AKfycby2L1-VrPRSZCeUgDJ4Hz9Yb_ojQyIGUlmCUTvjQC8R_VDCqqHBxE96YmRL9SRnQDWS/exec';
+var LABEL = { PUBLIC_TO_EVERYONE: 'Everyone', MUTUAL_FOLLOW_FRIENDS: 'Friends', FOLLOWER_OF_CREATOR: 'Followers', SELF_ONLY: 'Only me' };
+var BOXES = ['comment', 'duet', 'stitch', 'yourBrand', 'branded', 'consent'];
+function $(id) { return document.getElementById(id); }
+function say(m) { $('msg').hidden = !m; $('msg').textContent = m || ''; }
+function get(params) {
+  return fetch(API + '?' + new URLSearchParams(params), { credentials: 'omit' }).then(function (r) { return r.json(); });
+}
+function post(body) {
+  return fetch(API, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body) }).then(function (r) { return r.json(); });
+}
+function render(d) {
+  $('loading').hidden = true;
+  if (!d.connected) {
+    $('connect').hidden = false;
+    if (d.authUrl) { $('connectBtn').href = d.authUrl; $('connectBtn').hidden = false; } else { $('connectLocked').hidden = false; }
+    return;
+  }
+  var i = d.info, s = d.settings || {}, f = $('settings');
+  f.hidden = false;
+  $('avatar').src = i.creator_avatar_url; $('nick').textContent = i.creator_nickname; $('user').textContent = '@' + i.creator_username;
+  i.privacy_level_options.forEach(function (o) {
+    var op = document.createElement('option'); op.value = o; op.textContent = LABEL[o] || o; op.selected = s.privacy === o; $('privacy').appendChild(op);
+  });
+  BOXES.forEach(function (k) { $(k).checked = !!s[k]; });
+  ['comment', 'duet', 'stitch'].forEach(function (k) {
+    if (i[k + '_disabled']) { $(k).checked = false; $(k).disabled = true; $(k + '_off').hidden = false; }
+  });
+  if (!d.editable) {
+    Array.prototype.forEach.call(f.querySelectorAll('input,select'), function (el) { el.disabled = true; });
+    $('save').hidden = true; $('locked').hidden = false;
+  }
+}
+$('settings').onsubmit = function (ev) {
+  ev.preventDefault();
+  var st = { privacy: $('privacy').value };
+  BOXES.forEach(function (k) { st[k] = $(k).checked; });
+  if (!st.privacy) return say('Choose who can see your reposts.');
+  if (!st.consent) return say('Tick the last box to turn on automatic posting.');
+  if (st.branded && st.privacy === 'SELF_ONLY') return say('Branded content can not be private. Choose another audience.');
+  say('Saving...');
+  post({ api: 'save', settings: st }).then(function (r) { say(r.msg); }, function () { say('Could not reach Reel Reposter. Try again.'); });
+};
+(function () {
+  var q = new URLSearchParams(location.search);
+  var first = q.get('state') || q.get('code') || q.get('error')
+    ? get({ api: 'callback', code: q.get('code') || '', state: q.get('state') || '', error: q.get('error') || '',
+        error_description: q.get('error_description') || '' }).then(function (r) { say(r.msg); history.replaceState(null, '', location.pathname); })
+    : Promise.resolve();
+  first.then(function () { return get({ api: 'info' }); }).then(function (d) {
+    if (!d.ok) { $('loading').hidden = true; return say(d.msg); }
+    render(d);
+  }, function () { $('loading').hidden = true; say('Could not reach Reel Reposter. Try again.'); });
+})();
+</script>
+</body></html>
